@@ -58,7 +58,6 @@ require(sf) # For shapefiles
 ### Set box directory
 
 ```{r, include=FALSE}
-#box_auth(client_id = "y9p0tw4zbzduoomzcpsciif7xh83pmea", client_secret = "5yEqqcq19q5ZWjYxIPAkbWJyCzG0TzYe")
 
 ### Authenticate
 
