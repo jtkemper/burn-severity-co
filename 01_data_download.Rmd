@@ -1,0 +1,253 @@
+---
+title: "01_data_download"
+author: "JTK"
+date: "2025-03-25"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+################################################################################ 
+
+This script does WHAAAAAAAAAAAAT
+
+**Inputs**
+
+
+
+**Outputs**
+
+
+################################################################################
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+```
+
+# Housekeeping & Global Stuff
+
+### Packages 
+
+```{r}
+
+### General 
+
+require(here)
+
+### Data mgmt & processing
+
+require(tidyverse)
+
+
+### File mgmt
+
+require(boxr)
+require(usethis)
+require(XML)
+require(xml2)
+
+### Spatial stuff
+
+require(terra) # For rasters
+require(sf) # For shapefiles
+
+```
+
+### Set box directory
+
+```{r, include=FALSE}
+#box_auth(client_id = "y9p0tw4zbzduoomzcpsciif7xh83pmea", client_secret = "5yEqqcq19q5ZWjYxIPAkbWJyCzG0TzYe")
+
+### Authenticate
+
+box_auth()
+
+### Set box working directory
+
+#### This is the burn severity folder 
+
+box_setwd("313264329435")
+
+box_getwd()
+```
+
+### Set temp directory to store stuff
+```{r}
+
+### Do It
+
+temp_dir <- tempdir()
+
+```
+
+
+# Download burn severity data
+
+### Burn severity & fire boundaries
+
+#### Get the locations & file paths of the files
+
+```{r, include=FALSE}
+################################################################################
+
+## Get file locations
+
+### Find all data files in burn severity folder
+
+#### First get the location of all the data
+
+input_data_loc <- box_search_folders("data", ancestor_folder_ids = box_getwd())
+
+#### Then list all the files in the data folder
+
+mtbs_data_loc <- box_ls(dir_id = input_data_loc[[1]]$id)
+
+################################################################################
+
+################################################################################
+
+## Get file paths
+
+### Metadata file paths
+
+fire_metadata_files <- box_search(query = "metadata", file_extensions = "xml",
+                            ancestor_folder_ids = mtbs_data_loc[[1]]$id) %>%
+  as.data.frame() %>%
+  dplyr::select(name, id, path) 
+
+### Then get all the dnbr file paths located in the mtbs folder
+
+dnbr_files <- box_search(query = "dnbr", file_extensions = "tif", 
+                         ancestor_folder_ids = mtbs_data_loc[[1]]$id) %>%
+  as.data.frame() %>%
+  dplyr::select(name, id, path) %>%
+  dplyr::filter(!str_detect(name, "dnbr6")) %>%
+  mutate(fire = str_extract(path, "[^/]+$"))
+
+### Now get fire boundary files 
+
+#### The folder location
+
+bndry_and_mask_loc <- box_search_folders(query = "boundaries_and_masks", ancestor_folder_ids = mtbs_data_loc[[1]]$id)
+
+#### And names of the files
+fire_bdnry_files <- box_search(query = "burn_bndy", file_extensions = "shp", 
+                         ancestor_folder_ids = mtbs_data_loc[[1]]$id) %>%
+  as.data.frame() %>%
+  dplyr::select(name, path) %>%
+  mutate(fire = str_extract(path, "[^/]+$"))
+
+
+################################################################################
+
+################################################################################
+```
+
+#### Download the actual data
+
+```{r, include=FALSE}
+
+# Download actual data
+
+################################################################################
+
+## Metadata
+
+### First, download metadata file
+
+gc_metadata <- box_read(file_id = fire_metadata_files$id[1],
+         read_fun = xml2::read_xml)
+
+### Then extract some information from that file
+
+#### First, fire event ID
+
+fire_id <- gc_metadata %>%
+  xml_find_all("//idinfo/citation/citeinfo/title") %>%
+  xml_text() %>%
+  str_extract(., "[^-]*$") %>%
+  str_trim(.) %>%
+  tibble() %>%
+  rename(fire_id = 1)
+
+#### Then, fire name (if known) & size
+
+##### Get node location of supplementary info 
+##### (Where fire name is located)
+
+suppl_info_node <- gc_metadata %>%
+  xml_find_all("//idinfo/descript/supplinf") 
+
+#### Extract all the supplementary info
+
+suppl_info <- xml_text(suppl_info_node)
+
+##### Get just the info we want 
+##### (fire name and size)
+
+name_and_size <- read_delim(z, delim = "\n") %>%
+  rename(params = 1) %>%
+  filter(str_detect(params, "Name|Perimeter")) %>%
+  separate(params, 
+           into = c("param", "value"),
+           sep = ":") %>%
+  mutate(across(everything(), tolower))%>%
+  mutate(param = str_remove(param, "\\(.*\\)")) %>%
+  mutate(across(everything(), str_trim)) %>%
+  mutate(across(everything(), ~str_replace_all(., " ", "_"))) %>%
+  pivot_wider(names_from = param, values_from  = value) %>%
+  mutate(acres_within_fire_perimeter = as.numeric(acres_within_fire_perimeter))
+
+#### Combine metadata into one table
+
+fire_meta_table <- bind_cols(fire_id, name_and_size)
+
+################################################################################
+
+################################################################################
+
+## Burn severity
+
+### Download burn severity tiffs 
+
+gc_dnbr <- box_read(file_id = dnbr_files$id[1],
+         read_fun = terra::rast)
+
+################################################################################
+
+################################################################################
+
+## Fire boundary & stream mask files
+
+### Download files from box
+
+box_fetch(dir_id = bndry_and_mask_loc[[1]]$id, local_dir = temp_dir)
+
+### Get file names
+
+bndry_and_mask_files <- list.files(temp_dir) %>%
+  tibble(file = .) %>%
+  mutate(fire_id = str_extract(file, "^[^_]*"))
+
+bndry_files <- bndry_and_mask_files %>%
+  filter(str_detect(file, "burn_bndy.shp"))
+
+mask_files <- bndry_and_mask_files %>%
+  filter(str_detect(file, "mask.shp"))
+
+### Import shape files to R
+
+#### Fire boundary
+
+gc_fire_bndry <- st_read(file.path(temp_dir, bndry_files$file[1]))
+
+#### Stream Mask
+
+gc_mask <- st_read(file.path(temp_dir, mask_files$file[1]))
+
+st_read(here("input-data/co3957210726620200810_20200710_20210710_burn_bndy.shp"))
+
+```
+
