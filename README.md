@@ -1,7 +1,7 @@
 # burn-severity-co
 Predicting burn severity in Colorado watersheds
 
-$${\color{red}***Please note: This repo is in development***}$$
+$${\color{red} \space ***Please note: This repo is in development***}$$
 
 # Overview
 
