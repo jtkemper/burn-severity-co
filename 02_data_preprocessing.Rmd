@@ -1,0 +1,90 @@
+---
+title: "02_data_preprocessing"
+author: "JTK"
+date: "2025-03-28"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Housekeeping 
+
+### Packages
+
+```{r}
+
+### Genearl data mgmt
+
+require(tidyverse)
+
+### Spatial
+
+require(terra)
+require(sf)
+require(mapview)
+
+### Viz
+
+require(ggplot2)
+require(ggthemes)
+require(tmap)
+
+```
+
+### Set Box working directory
+
+```{r, include = FALSE}
+
+
+### Authenticate
+
+box_auth()
+
+### Set box working directory
+
+#### This is the burn severity folder 
+
+box_setwd("313264329435")
+
+box_getwd()
+
+```
+
+### Load prior scripts
+```{r, message=FALSE, warning=FALSE, eval=FALSE}
+
+source(knitr::purl(here("Rmd-files/01_data_download.Rmd"), 
+                   quiet=TRUE))
+
+```
+
+
+# Clip & mask dNBR data
+
+### Clip dNBR data by fire boundary
+
+```{r}
+
+### Do it
+
+#### Clip by fire boundary
+
+gc_dnbr_clip <- mask(gc_dnbr, gc_fire_bndry)
+
+#### Mask out river pixels
+
+gc_dnbr_clip_mask <- mask(gc_dnbr_clip, gc_mask, inverse = TRUE)
+
+#### Plot
+
+terra::plot(gc_dnbr_clip_mask, col = rev(map.pal("ryg")))
+
+polys(gc_fire_bndry)
+
+
+```
+
