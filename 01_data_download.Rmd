@@ -45,7 +45,6 @@ require(tidyverse)
 
 require(boxr)
 require(usethis)
-require(XML)
 require(xml2)
 
 ### Spatial stuff
