@@ -88,3 +88,11 @@ polys(gc_fire_bndry)
 
 ```
 
+### Test invisibility cloak
+
+```{r, echo=FALSE}
+
+Does it work
+
+```
+
